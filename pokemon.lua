@@ -18,16 +18,17 @@ local Lighting     = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 local RunService   = game:GetService("RunService")
 local Players      = game:GetService("Players")
+local Terrain      = Workspace.Terrain
 
 -- ═══════════════════════════════════════════════════════════════
 -- CONFIGURACIÓN DEL MUNDO GIGANTE
 -- ═══════════════════════════════════════════════════════════════
 local W = {
-    SIZE_X    = 1200,
-    SIZE_Z    = 1200,
+    SIZE_X    = 1800,
+    SIZE_Z    = 1800,
     BASE_Y    = 0,
     SEED      = 73,
-    MTN_START = 420,
+    MTN_START = 700,
 
     C = {
         G_BASE    = Color3.fromRGB(72,  148,  20),
@@ -286,56 +287,49 @@ end
 -- 3. HIERBA  — cubre TODO el mapa gigante
 -- ═══════════════════════════════════════════════════════════════
 local function buildGrass(GF)
-    local hX = W.SIZE_X*0.5 - 10
-    local hZ = W.SIZE_Z*0.5 - 10
-    local GROUPS = 5500
-    local blades = 0
+    -- Usamos Terrain de Roblox para un césped más natural que miles de partes rígidas.
+    -- El folder GF se mantiene para compatibilidad con el flujo del generador.
+    local hX = W.SIZE_X*0.5 - 8
+    local hZ = W.SIZE_Z*0.5 - 8
+    local step = 12
+    local painted = 0
 
-    for g = 1, GROUPS do
+    for x = -hX, hX, step do
+        for z = -hZ, hZ, step do
+            local gy = groundH(x, z)
+            local n1 = fnoise(x*0.02, z*0.02, 3, 0.5, 2, 1, W.SEED+141)
+            local n2 = fnoise(x*0.045, z*0.045, 2, 0.5, 2, 1, W.SEED+211)
+
+            -- Mosaico orgánico de Grass + LeafyGrass para evitar repetición visual.
+            local mat = (n1 > 0.08 or n2 > 0.2) and Enum.Material.LeafyGrass or Enum.Material.Grass
+            local hVar = 1.0 + math.max(0, n2) * 0.9
+            Terrain:FillBlock(
+                CFrame.new(x, gy-0.2, z),
+                Vector3.new(step+1.2, hVar, step+1.2),
+                mat
+            )
+            painted = painted + 1
+        end
+        task.wait()
+    end
+
+    -- Zonas de hierba alta Terrain (parches tipo pastizal).
+    for i = 1, 460 do
         local gx = rng(-hX, hX)
         local gz = rng(-hZ, hZ)
-        local gy0 = groundH(gx, gz)
-
-        local zn     = math.noise(gx*0.012+5, gz*0.012+5)
-        local isWild = zn > 0.15
-
-        local bCount  = isWild and rngi(10,18) or rngi(5,12)
-        local bRadius = isWild and 3.2 or 2.2
-
-        for b = 1, bCount do
-            local bx  = gx + rng(-bRadius, bRadius)
-            local bz  = gz + rng(-bRadius, bRadius)
-            local by0 = groundH(bx, bz)
-            local bH, bCol, bMat
-            if isWild then
-                bH   = rng(2.2, 5.0)
-                bCol = lc(W.C.G_WILD, W.C.G_DARK, math.random()*0.45)
-                bMat = Enum.Material.Grass
-            else
-                bH   = rng(0.5, 1.9)
-                bCol = lc(W.C.G_BASE, W.C.G_BRIGHT, math.random())
-                bMat = Enum.Material.LeafyGrass
-            end
-            local blade = mp({
-                n   = "Bl",
-                sz  = Vector3.new(rng(0.16,0.32), bH, rng(0.04,0.10)),
-                cf  = CFrame.new(bx, by0+bH*0.5, bz)
-                   * CFrame.Angles(math.rad(rng(-18,18)), math.rad(rng(0,360)), math.rad(rng(-18,18))),
-                col = bCol, mat = bMat, cc = false, cs = false, par = GF,
-            })
-            if math.random() < 0.16 then
-                registerWind(blade, rng(5, 12), rng(0.8, 1.7), rng(0, math.pi*2), 0.35)
-            end
-            blades = blades + 1
-        end
-
-        if g % 250 == 0 then
-            task.wait()
-            print(string.format("   Hierba %d%%", math.floor(g/GROUPS*100)))
-        end
+        local gy = groundH(gx, gz)
+        local patchW = rng(8, 18)
+        local patchD = rng(8, 18)
+        Terrain:FillBlock(
+            CFrame.new(gx, gy-0.08, gz) * CFrame.Angles(0, rng(0, math.pi*2), 0),
+            Vector3.new(patchW, rng(0.8, 1.6), patchD),
+            Enum.Material.LeafyGrass
+        )
     end
-    print("✅ Hierba lista ("..blades.." briznas)")
+
+    print("✅ Hierba Terrain lista ("..painted.." celdas)")
 end
+
 
 -- ═══════════════════════════════════════════════════════════════
 -- 4. FLORES DETALLADAS
@@ -432,149 +426,90 @@ end
 -- 5. ROCAS  (moldeadas al suelo, con musgo)
 -- ═══════════════════════════════════════════════════════════════
 local function buildRocks(RF)
-    local hX   = W.SIZE_X*0.5 - 30
-    local hZ   = W.SIZE_Z*0.5 - 30
-    local GROUPS = 220
+    local hX   = W.SIZE_X*0.5 - 45
+    local hZ   = W.SIZE_Z*0.5 - 45
+    local GROUPS = 280
     local count = 0
 
     for r = 1, GROUPS do
         local rx  = rng(-hX, hX)
         local rz  = rng(-hZ, hZ)
-        local rn  = math.noise(rx*0.035+100, rz*0.035+100)
-        local gr  = rng(4, 11)
+        local rn  = fnoise(rx*0.025, rz*0.025, 3, 0.5, 2.1, 1, W.SEED+301)
+        local gr  = rng(5.5, 13.5)
 
-        if rn >= -0.12 and not isOcc(rx, rz, gr+3) then
+        if rn >= -0.18 and not isOcc(rx, rz, gr+4) then
             markOcc(rx, rz, gr)
             local gy      = groundH(rx, rz)
-            local rType   = rngi(1, 5)
-            local hasMoss = math.random() < 0.4
+            local hasMoss = math.random() < 0.62
 
-            if rType == 1 then
-                -- Boulder grande
-                local rS  = rng(3.5, 8)
-                local rH  = rS * rng(0.7, 1.1)
-                local rotY = rng(0, 360)
-                mp({ n="RkBase", sz=Vector3.new(rS*1.35, 0.9, rS*1.35),
-                     cf=CFrame.new(rx, gy+0.1, rz) * CFrame.Angles(0, math.rad(rotY), 0),
-                     col=lc(W.C.DIRT, W.C.G_DARK, 0.5), mat=Enum.Material.Mud, par=RF })
-                mp({ n="RkMain", sz=Vector3.new(rS, rH, rS*rng(0.78,1.0)),
-                     cf=CFrame.new(rx, gy+rH*0.48, rz)
-                       * CFrame.Angles(math.rad(rng(-7,7)), math.rad(rotY), math.rad(rng(-5,5))),
-                     col=lc(W.C.R_BASE, W.C.R_DARK, rng(0,0.5)), mat=Enum.Material.Rock, par=RF })
-                mp({ n="RkTop", sz=Vector3.new(rS*0.75, rH*0.28, rS*0.68),
-                     cf=CFrame.new(rx+rng(-0.4,0.4), gy+rH*0.86, rz+rng(-0.4,0.4))
-                       * CFrame.Angles(math.rad(rng(-14,14)), math.rad(rotY+18), math.rad(rng(-9,9))),
-                     col=W.C.R_LIGHT, mat=Enum.Material.Rock, par=RF })
-                if hasMoss then
-                    for m = 1, rngi(2, 4) do
-                        local ma = rng(0, math.pi*2)
-                        mp({ n="RkMoss", sz=Vector3.new(rS*rng(0.3,0.5), 0.18, rS*rng(0.25,0.45)),
-                             cf=CFrame.new(rx+math.cos(ma)*rS*0.3, gy+rH*rng(0.2,0.6), rz+math.sin(ma)*rS*0.3)
-                               * CFrame.Angles(math.rad(rng(-20,20)), ma, 0),
-                             col=W.C.R_MOSS, mat=Enum.Material.Grass,
-                             cc=false, cs=false, par=RF })
-                    end
+            -- Base semienterrada para que no "floten".
+            mp({ n="RBase", sz=Vector3.new(gr*2.3, rng(0.9,1.8), gr*2.1),
+                 cf=CFrame.new(rx, gy+0.15, rz) * CFrame.Angles(0, rng(0, math.pi*2), 0),
+                 col=lc(W.C.DIRT_D, W.C.R_DARK, rng(0.15,0.35)), mat=Enum.Material.Slate, par=RF })
+
+            local cores = rngi(2, 4)
+            for c = 1, cores do
+                local ca = rng(0, math.pi*2)
+                local cd = rng(0, gr*0.28)
+                local cx = rx + math.cos(ca)*cd
+                local cz = rz + math.sin(ca)*cd
+                local ch = rng(2.5, 7.5)
+                local cw = rng(2.0, 5.8)
+                local cd2 = rng(1.8, 5.0)
+                local cgy = groundH(cx, cz)
+
+                mp({ n="RB", sz=Vector3.new(cw, ch, cd2),
+                     cf=CFrame.new(cx, cgy+ch*0.45, cz)
+                       * CFrame.Angles(math.rad(rng(-12,12)), math.rad(rng(0,360)), math.rad(rng(-10,10))),
+                     col=lc(W.C.R_BASE, W.C.R_LIGHT, rng(0.12,0.88)), mat=Enum.Material.Rock, par=RF })
+
+                if math.random() < 0.55 then
+                    mw({ n="RCut", sz=Vector3.new(cw*rng(0.55,0.95), ch*rng(0.28,0.52), cd2*rng(0.55,0.95)),
+                         cf=CFrame.new(cx+rng(-0.5,0.5), cgy+ch*0.74, cz+rng(-0.5,0.5))
+                           * CFrame.Angles(math.rad(rng(-20,20)), math.rad(rng(0,360)), 0),
+                         col=lc(W.C.R_LIGHT, W.C.R_BASE, 0.4), mat=Enum.Material.Slate, par=RF })
                 end
-                for f = 1, rngi(2, 6) do
-                    local fa = rng(0, math.pi*2)
-                    local fd = rng(rS*0.7, gr*0.9)
-                    local fx = rx + math.cos(fa)*fd
-                    local fz = rz + math.sin(fa)*fd
-                    local fs = rng(0.4, 2.0)
-                    local fgy = groundH(fx, fz)
-                    mp({ n="RkFr", sz=Vector3.new(fs, fs*rng(0.5,0.8), fs*rng(0.7,1.1)),
-                         cf=CFrame.new(fx, fgy+fs*0.35, fz)
-                           * CFrame.Angles(math.rad(rng(-28,28)), math.rad(rng(0,360)), math.rad(rng(-22,22))),
-                         col=lc(W.C.R_BASE, W.C.R_LIGHT, math.random()), mat=Enum.Material.Rock, par=RF })
-                end
+            end
 
-            elseif rType == 2 then
-                -- Cluster orgánico
-                for c = 1, rngi(4, 9) do
-                    local ca  = rng(0, math.pi*2)
-                    local cd  = rng(0, gr*0.8)
-                    local cx2 = rx + math.cos(ca)*cd
-                    local cz2 = rz + math.sin(ca)*cd
-                    local cgy = groundH(cx2, cz2)
-                    local cs2 = rng(1.0, 4.0)
-                    local ch  = cs2 * rng(0.6, 1.3)
-                    mp({ n="CkBase", sz=Vector3.new(cs2*1.2, 0.6, cs2*1.2),
-                         cf=CFrame.new(cx2, cgy+0.05, cz2),
-                         col=lc(W.C.DIRT_D, W.C.G_DARK, 0.4), mat=Enum.Material.Ground, par=RF })
-                    mp({ n="CkRk", sz=Vector3.new(cs2, ch, cs2*rng(0.72,1.15)),
-                         cf=CFrame.new(cx2, cgy+ch*0.46, cz2)
-                           * CFrame.Angles(math.rad(rng(-16,16)), math.rad(rng(0,360)), math.rad(rng(-12,12))),
-                         col=lc(W.C.R_DARK, W.C.R_BASE, rng(0,0.7)), mat=Enum.Material.Rock, par=RF })
-                    if hasMoss and math.random() < 0.5 then
-                        mp({ n="CkMs", sz=Vector3.new(cs2*0.6, 0.12, cs2*0.55),
-                             cf=CFrame.new(cx2, cgy+ch*0.88, cz2) * CFrame.Angles(math.rad(rng(-8,8)), rng(0,math.pi*2), 0),
-                             col=W.C.R_MOSS, mat=Enum.Material.Grass,
-                             cc=false, cs=false, par=RF })
-                    end
-                end
+            -- Esquirlas y grava alrededor.
+            for s2 = 1, rngi(10, 20) do
+                local sa = rng(0, math.pi*2)
+                local sd = rng(gr*0.45, gr*1.05)
+                local sx = rx + math.cos(sa)*sd
+                local sz = rz + math.sin(sa)*sd
+                local ss = rng(0.35, 1.9)
+                local sgy = groundH(sx, sz)
+                mp({ n="RSm", sz=Vector3.new(ss, ss*rng(0.35,0.78), ss*rng(0.8,1.6)),
+                     cf=CFrame.new(sx, sgy+ss*0.22, sz)
+                       * CFrame.Angles(math.rad(rng(-22,22)), math.rad(rng(0,360)), math.rad(rng(-18,18))),
+                     col=lc(W.C.R_BASE, W.C.R_LIGHT, math.random()), mat=Enum.Material.Rock, par=RF })
+            end
 
-            elseif rType == 3 then
-                -- Lajas apiladas
-                local bSz  = rng(3.0, 6.5)
-                local lyrs = rngi(3, 6)
-                for l = 1, lyrs do
-                    local lt  = (l-1)/(lyrs-1)
-                    local lSz = bSz*(1-lt*0.22)
-                    local lH  = rng(0.4, 1.0)
-                    local oX  = rng(-0.5,0.5)*l
-                    local oZ  = rng(-0.5,0.5)*l
-                    local lgy = groundH(rx+oX*0.3, rz+oZ*0.3)
-                    mp({ n="Lj", sz=Vector3.new(lSz, lH, lSz*rng(0.8,1.1)),
-                         cf=CFrame.new(rx+oX, lgy+l*1.05-0.5, rz+oZ)
-                           * CFrame.Angles(math.rad(rng(-4,4)), math.rad(rng(0,45)), math.rad(rng(-3,3))),
-                         col=lc(W.C.R_DARK, W.C.R_LIGHT, lt), mat=Enum.Material.Slate, par=RF })
-                end
-                mp({ n="LjBase", sz=Vector3.new(bSz*1.4, 0.55, bSz*1.4),
-                     cf=CFrame.new(rx, groundH(rx,rz)+0.12, rz),
-                     col=W.C.DIRT, mat=Enum.Material.Mud, par=RF })
-
-            elseif rType == 4 then
-                -- Roca puntiaguda
-                local bR  = rng(1.5, 3.5)
-                local tH2 = rng(4.0, 9.0)
-                local ggy = groundH(rx, rz)
-                mp({ n="SpBase", sz=Vector3.new(bR*2.5, 0.8, bR*2.5),
-                     cf=CFrame.new(rx, ggy+0.15, rz),
-                     col=W.C.DIRT_D, mat=Enum.Material.Rock, par=RF })
-                mp({ n="SpMain", sz=Vector3.new(bR*2, tH2, bR*1.8),
-                     cf=CFrame.new(rx, ggy+tH2*0.5, rz)
-                       * CFrame.Angles(math.rad(rng(-8,8)), math.rad(rng(0,360)), math.rad(rng(-6,6))),
-                     col=lc(W.C.R_DARK, W.C.R_BASE, 0.35), mat=Enum.Material.Rock, par=RF })
-                mw({ n="SpTip", sz=Vector3.new(bR*1.4, tH2*0.35, bR*1.3),
-                     cf=CFrame.new(rx, ggy+tH2*0.9, rz) * CFrame.Angles(0, math.rad(rng(0,360)), 0),
-                     col=W.C.R_LIGHT, mat=Enum.Material.Rock, par=RF })
-
-            else
-                -- Piedras pequeñas dispersas
-                for s = 1, rngi(8, 16) do
-                    local sa  = rng(0, math.pi*2)
-                    local sd  = rng(0, gr)
-                    local sx2 = rx + math.cos(sa)*sd
-                    local sz2 = rz + math.sin(sa)*sd
-                    local ss  = rng(0.25, 1.3)
-                    local sgy = groundH(sx2, sz2)
-                    mp({ n="SmRk", sz=Vector3.new(ss, ss*rng(0.45,0.75), ss*rng(0.75,1.25)),
-                         cf=CFrame.new(sx2, sgy+ss*0.28, sz2)
-                           * CFrame.Angles(math.rad(rng(-30,30)), math.rad(rng(0,360)), math.rad(rng(-25,25))),
-                         col=lc(W.C.R_BASE, W.C.R_LIGHT, math.random()), mat=Enum.Material.Rock, par=RF })
+            if hasMoss then
+                for m = 1, rngi(2, 5) do
+                    local ma = rng(0, math.pi*2)
+                    local md = rng(0, gr*0.5)
+                    local mx = rx + math.cos(ma)*md
+                    local mz = rz + math.sin(ma)*md
+                    local mgy = groundH(mx, mz)
+                    mp({ n="RMoss", sz=Vector3.new(rng(1.3,3.6), rng(0.22,0.5), rng(1.2,3.2)),
+                         cf=CFrame.new(mx, mgy+0.12, mz) * CFrame.Angles(0, rng(0, math.pi*2), 0),
+                         col=lc(W.C.R_MOSS, W.C.G_WILD, rng(0.1,0.7)), mat=Enum.Material.Grass,
+                         cc=false, cs=false, par=RF })
                 end
             end
 
             count = count + 1
         end
 
-        if r % 18 == 0 then
+        if r % 20 == 0 then
             task.wait()
             print(string.format("   Rocas %d%%", math.floor(r/GROUPS*100)))
         end
     end
-    print("✅ Rocas listas ("..count.." formaciones)")
+    print("✅ Rocas realistas listas ("..count.." formaciones)")
 end
+
 
 -- ═══════════════════════════════════════════════════════════════
 -- 6. MONTAÑAS  (estilo Pokémon DP)
