@@ -110,6 +110,11 @@ local function groundH(x, z)
     return W.BASE_Y + h * fx * fz
 end
 
+local function surfaceH(x, z)
+    -- Compensa el volumen de Terrain pintado para colocar objetos arriba del terreno visible.
+    return groundH(x, z) + 0.5
+end
+
 local occupied = {}
 local windParts = {}
 local windStarted = false
@@ -277,8 +282,11 @@ local function buildTerrain(TF)
             print(string.format("   Terreno %d%%", math.floor(ix/TX*100)))
         end
     end
-    mp({ n="Floor", sz=Vector3.new(W.SIZE_X+200,4,W.SIZE_Z+200),
-         pos=Vector3.new(0, W.BASE_Y-5, 0),
+    -- Capa base adicional para tapar cualquier hueco y ocultar por completo el baseplate.
+    Terrain:FillBlock(CFrame.new(0, W.BASE_Y-5, 0), Vector3.new(W.SIZE_X+520, 10, W.SIZE_Z+520), Enum.Material.Grass)
+
+    mp({ n="Floor", sz=Vector3.new(W.SIZE_X+520,6,W.SIZE_Z+520),
+         pos=Vector3.new(0, W.BASE_Y-6.5, 0),
          col=W.C.G_DARK, mat=Enum.Material.Grass, par=TF })
     print("✅ Terreno listo ("..n.." tiles)")
 end
@@ -345,11 +353,11 @@ local FTYPES = {
 }
 
 local function oneFlower(x, z, FF)
-    local gy   = groundH(x, z)
+    local gy   = surfaceH(x, z)
     local ft   = FTYPES[rngi(1, #FTYPES)]
     local pCol, cCol, nPet, round = ft[1], ft[2], ft[3], ft[4]
-    local sH   = rng(0.9, 1.8)
-    local sW   = rng(0.11, 0.16)
+    local sH   = rng(1.3, 2.5)
+    local sW   = rng(0.14, 0.22)
     local tX   = rng(-12, 12)
     local tZ   = rng(-12, 12)
 
@@ -375,7 +383,7 @@ local function oneFlower(x, z, FF)
     end
 
     local topY  = gy + sH + 0.05
-    local pSize = rng(0.34, 0.62)
+    local pSize = rng(0.45, 0.82)
 
     -- Pétalos
     for p = 1, nPet do
@@ -439,7 +447,7 @@ local function buildRocks(RF)
 
         if rn >= -0.18 and not isOcc(rx, rz, gr+4) then
             markOcc(rx, rz, gr)
-            local gy      = groundH(rx, rz)
+            local gy      = surfaceH(rx, rz)
             local hasMoss = math.random() < 0.62
 
             -- Base semienterrada para que no "floten".
@@ -456,7 +464,7 @@ local function buildRocks(RF)
                 local ch = rng(2.5, 7.5)
                 local cw = rng(2.0, 5.8)
                 local cd2 = rng(1.8, 5.0)
-                local cgy = groundH(cx, cz)
+                local cgy = surfaceH(cx, cz)
 
                 mp({ n="RB", sz=Vector3.new(cw, ch, cd2),
                      cf=CFrame.new(cx, cgy+ch*0.45, cz)
@@ -478,7 +486,7 @@ local function buildRocks(RF)
                 local sx = rx + math.cos(sa)*sd
                 local sz = rz + math.sin(sa)*sd
                 local ss = rng(0.35, 1.9)
-                local sgy = groundH(sx, sz)
+                local sgy = surfaceH(sx, sz)
                 mp({ n="RSm", sz=Vector3.new(ss, ss*rng(0.35,0.78), ss*rng(0.8,1.6)),
                      cf=CFrame.new(sx, sgy+ss*0.22, sz)
                        * CFrame.Angles(math.rad(rng(-22,22)), math.rad(rng(0,360)), math.rad(rng(-18,18))),
@@ -491,7 +499,7 @@ local function buildRocks(RF)
                     local md = rng(0, gr*0.5)
                     local mx = rx + math.cos(ma)*md
                     local mz = rz + math.sin(ma)*md
-                    local mgy = groundH(mx, mz)
+                    local mgy = surfaceH(mx, mz)
                     mp({ n="RMoss", sz=Vector3.new(rng(1.3,3.6), rng(0.22,0.5), rng(1.2,3.2)),
                          cf=CFrame.new(mx, mgy+0.12, mz) * CFrame.Angles(0, rng(0, math.pi*2), 0),
                          col=lc(W.C.R_MOSS, W.C.G_WILD, rng(0.1,0.7)), mat=Enum.Material.Grass,
@@ -721,7 +729,7 @@ local function buildMountains(MF)
             local br = g.b * rng(1.2, 1.65)
             local bx = g.x + math.cos(ba) * br
             local bz = g.z + math.sin(ba) * br
-            local by = groundH(bx, bz)
+            local by = surfaceH(bx, bz)
             local bh = rng(7, 14)
             mp({ n="MSk", sz=Vector3.new(rng(16,26), bh, rng(10,18)),
                  cf=CFrame.new(bx, by+bh*0.45, bz) * CFrame.Angles(0, ba, 0),
@@ -739,7 +747,7 @@ end
 -- ═══════════════════════════════════════════════════════════════
 local function buildTrees(TrF)
     local hX = W.SIZE_X*0.5-30; local hZ = W.SIZE_Z*0.5-30
-    local COUNT = 320; local done = 0; local tries = 0
+    local COUNT = 360; local done = 0; local tries = 0
 
     while done < COUNT and tries < COUNT*7 do
         tries = tries + 1
@@ -748,11 +756,11 @@ local function buildTrees(TrF)
 
         if fn3 >= 0.03 and not isOcc(tx, tz, 7) then
             markOcc(tx, tz, 6)
-            local gy = groundH(tx, tz)
+            local gy = surfaceH(tx, tz)
             local tt = rngi(1, 3)
 
             if tt == 1 then
-                local trH = rng(4.5, 9); local trW = rng(0.8, 1.4); local cpR = rng(4, 7)
+                local trH = rng(8.5, 16); local trW = rng(1.3, 2.2); local cpR = rng(6.5, 11)
                 mp({ n="TrRt", sz=Vector3.new(trW*1.7, rng(0.35,0.7), trW*1.7),
                      pos=Vector3.new(tx, gy+0.15, tz), col=W.C.DIRT_D,
                      mat=Enum.Material.Ground, par=TrF })
@@ -771,7 +779,7 @@ local function buildTrees(TrF)
                 end
 
             elseif tt == 2 then
-                local trH = rng(7,14); local cpR = rng(3.5,5.5); local cones = rngi(3,5)
+                local trH = rng(11,22); local cpR = rng(5.2,8.8); local cones = rngi(4,6)
                 mp({ n="PRt", sz=Vector3.new(1.45, rng(0.35,0.65), 1.45),
                      pos=Vector3.new(tx, gy+0.15, tz),
                      col=W.C.DIRT_D, mat=Enum.Material.Ground, par=TrF })
@@ -787,7 +795,7 @@ local function buildTrees(TrF)
                 end
 
             else
-                local trH = rng(3.5, 7)
+                local trH = rng(7, 13)
                 mp({ n="FRt", sz=Vector3.new(1.7, rng(0.35,0.75), 1.7),
                      pos=Vector3.new(tx, gy+0.15, tz),
                      col=W.C.DIRT_D, mat=Enum.Material.Ground, par=TrF })
@@ -879,7 +887,7 @@ local function buildPath(PF)
         local nx = math.sin(t2*math.pi*2.2)*18
         local dir = Vector3.new(nx-px, 0, nz-pz)
         local segLen = math.max(9.5, dir.Magnitude + 2.6)
-        local py = groundH(px, pz) + 0.15
+        local py = surfaceH(px, pz) + 0.18
         local pcf = CFrame.lookAt(Vector3.new(px, py, pz), Vector3.new(px, py, pz)+dir)
         mp({ n="Pt", sz=Vector3.new(7.5, 0.55, segLen),
              cf=pcf,
