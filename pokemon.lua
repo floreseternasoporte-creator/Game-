@@ -116,6 +116,8 @@ local function surfaceH(x, z)
 end
 
 local occupied = {}
+local windParts = {}
+local windStarted = false
 local function isOcc(x, z, r)
     for _, p in ipairs(occupied) do
         local dx, dz = p.x-x, p.z-z
@@ -125,6 +127,37 @@ local function isOcc(x, z, r)
 end
 local function markOcc(x, z, r)
     occupied[#occupied+1] = {x=x, z=z, r=r}
+end
+
+local function registerWind(part, ampDeg, speed, phase, axisMix)
+    if #windParts > 2600 then return end
+    windParts[#windParts+1] = {
+        p = part,
+        base = part.CFrame,
+        amp = math.rad(ampDeg),
+        speed = speed,
+        phase = phase or 0,
+        axis = axisMix or 0.4,
+    }
+end
+
+local function startWind()
+    if windStarted then return end
+    windStarted = true
+    task.spawn(function()
+        while true do
+            local t = tick()
+            for i = 1, #windParts do
+                local w = windParts[i]
+                if w.p and w.p.Parent then
+                    local sway = math.sin(t*w.speed + w.phase) * w.amp
+                    local side = math.cos(t*w.speed*0.65 + w.phase*1.4) * w.amp * w.axis
+                    w.p.CFrame = w.base * CFrame.Angles(sway, 0, side)
+                end
+            end
+            task.wait(0.05)
+        end
+    end)
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -329,11 +362,14 @@ local function oneFlower(x, z, FF)
     local tZ   = rng(-12, 12)
 
     -- Tallo
-    mp({ n="FSt", sz=Vector3.new(sW,sH,sW),
+    local stem = mp({ n="FSt", sz=Vector3.new(sW,sH,sW),
          cf=CFrame.new(x, gy+sH*0.5, z)
            * CFrame.Angles(math.rad(tX), rng(0,math.pi*2), math.rad(tZ)),
          col=W.C.F_STEM, mat=Enum.Material.SmoothPlastic,
          cc=false, cs=false, par=FF })
+    if math.random() < 0.75 then
+        registerWind(stem, rng(4, 8), rng(0.9, 1.4), rng(0, math.pi*2), 0.55)
+    end
 
     -- Hojitas
     if math.random() < 0.6 then
@@ -934,6 +970,7 @@ local function buildWorld()
     print("🌱 [2/9] Terreno…")    ; buildTerrain(TF)
     print("🌿 [3/9] Hierba…")     ; buildGrass(GF)
     print("🌸 [4/9] Flores…")     ; buildFlowers(FlF)
+    startWind()
     print("🪨 [5/9] Rocas…")      ; buildRocks(RF)
     print("⛰️  [6/9] Montañas…")   ; buildMountains(MF)
     print("🌳 [7/9] Árboles…")    ; buildTrees(TrF)
