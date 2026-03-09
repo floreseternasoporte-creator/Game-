@@ -343,21 +343,21 @@ end
 -- 4. FLORES DETALLADAS
 -- ═══════════════════════════════════════════════════════════════
 local FTYPES = {
-    {W.C.F_RED,    W.C.F_YELLOW, 5, false},
-    {W.C.F_PINK,   W.C.F_WHITE,  6, true},
-    {W.C.F_YELLOW, W.C.F_ORANGE, 5, false},
-    {W.C.F_BLUE,   W.C.F_WHITE,  6, true},
-    {W.C.F_PURPLE, W.C.F_YELLOW, 5, false},
-    {W.C.F_WHITE,  W.C.F_YELLOW, 6, true},
-    {W.C.F_ORANGE, W.C.F_YELLOW, 5, false},
+    {W.C.F_RED,    W.C.F_YELLOW, 6, false},
+    {W.C.F_PINK,   W.C.F_WHITE,  8, true},
+    {W.C.F_YELLOW, W.C.F_ORANGE, 7, false},
+    {W.C.F_BLUE,   W.C.F_WHITE,  8, true},
+    {W.C.F_PURPLE, W.C.F_YELLOW, 7, false},
+    {W.C.F_WHITE,  W.C.F_YELLOW, 9, true},
+    {W.C.F_ORANGE, W.C.F_YELLOW, 7, false},
 }
 
 local function oneFlower(x, z, FF)
     local gy   = surfaceH(x, z)
     local ft   = FTYPES[rngi(1, #FTYPES)]
     local pCol, cCol, nPet, round = ft[1], ft[2], ft[3], ft[4]
-    local sH   = rng(1.3, 2.5)
-    local sW   = rng(0.14, 0.22)
+    local sH   = rng(1.5, 2.8)
+    local sW   = rng(0.16, 0.24)
     local tX   = rng(-12, 12)
     local tZ   = rng(-12, 12)
 
@@ -383,7 +383,7 @@ local function oneFlower(x, z, FF)
     end
 
     local topY  = gy + sH + 0.05
-    local pSize = rng(0.45, 0.82)
+    local pSize = rng(0.55, 0.95)
 
     -- Pétalos
     for p = 1, nPet do
@@ -398,6 +398,32 @@ local function oneFlower(x, z, FF)
              cc=false, cs=false, par=FF })
     end
 
+
+    -- Capa extra de pétalos para flores más vistosas
+    if math.random() < 0.72 then
+        local outerN = nPet + rngi(2,4)
+        for op = 1, outerN do
+            local oang  = (op/outerN) * math.pi * 2 + rng(-0.08,0.08)
+            local oDist = pSize * rng(0.82, 1.0)
+            local oW    = pSize * rng(0.45, 0.72)
+            local oH    = pSize * rng(0.35, 0.6)
+            mp({ n="FPO", sz=Vector3.new(oW, oH, pSize*0.2),
+                 cf=CFrame.new(x+math.cos(oang)*oDist, topY+oH*0.25, z+math.sin(oang)*oDist)
+                   * CFrame.Angles(math.rad(rng(-18,18)), oang, math.rad(-36)),
+                 col=lc(pCol, cCol, rng(0.25,0.55)), mat=Enum.Material.SmoothPlastic,
+                 cc=false, cs=false, par=FF })
+        end
+    end
+
+    -- Sépalos verdes bajo los pétalos
+    for sg = 1, rngi(4,6) do
+        local sa = (sg/6) * math.pi * 2
+        mp({ n="FSep", sz=Vector3.new(pSize*0.42, pSize*0.18, pSize*0.20),
+             cf=CFrame.new(x+math.cos(sa)*pSize*0.35, topY, z+math.sin(sa)*pSize*0.35)
+               * CFrame.Angles(math.rad(rng(-8,8)), sa, math.rad(18)),
+             col=lc(W.C.F_STEM, W.C.G_BRIGHT, rng(0.1,0.35)),
+             mat=Enum.Material.LeafyGrass, cc=false, cs=false, par=FF })
+    end
     -- Centro
     mp({ n="FC", sz=Vector3.new(pSize*0.55, pSize*0.45, pSize*0.55),
          cf=CFrame.new(x, topY+pSize*0.28, z),
@@ -408,21 +434,21 @@ end
 local function buildFlowers(FF)
     local hX = W.SIZE_X*0.5 - 15
     local hZ = W.SIZE_Z*0.5 - 15
-    local COUNT = 1800
+    local COUNT = 16000
     local done = 0
 
     for f = 1, COUNT do
         local fx = rng(-hX, hX)
         local fz = rng(-hZ, hZ)
         local fn2 = fnoise(fx*0.018, fz*0.018, 3, 0.5, 2, 1, W.SEED+55)
-        if fn2 > -0.25 then
-            local cN = rngi(1, 4)
+        if fn2 > -0.42 then
+            local cN = rngi(4, 14)
             for c = 1, cN do
-                oneFlower(fx + rng(-1.8,1.8), fz + rng(-1.8,1.8), FF)
+                oneFlower(fx + rng(-2.4,2.4), fz + rng(-2.4,2.4), FF)
                 done = done + 1
             end
         end
-        if f % 200 == 0 then
+        if f % 400 == 0 then
             task.wait()
             print(string.format("   Flores %d%%", math.floor(f/COUNT*100)))
         end
