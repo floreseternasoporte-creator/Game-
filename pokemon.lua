@@ -110,6 +110,8 @@ local function groundH(x, z)
 end
 
 local occupied = {}
+local windParts = {}
+local windStarted = false
 local function isOcc(x, z, r)
     for _, p in ipairs(occupied) do
         local dx, dz = p.x-x, p.z-z
@@ -119,6 +121,37 @@ local function isOcc(x, z, r)
 end
 local function markOcc(x, z, r)
     occupied[#occupied+1] = {x=x, z=z, r=r}
+end
+
+local function registerWind(part, ampDeg, speed, phase, axisMix)
+    if #windParts > 2600 then return end
+    windParts[#windParts+1] = {
+        p = part,
+        base = part.CFrame,
+        amp = math.rad(ampDeg),
+        speed = speed,
+        phase = phase or 0,
+        axis = axisMix or 0.4,
+    }
+end
+
+local function startWind()
+    if windStarted then return end
+    windStarted = true
+    task.spawn(function()
+        while true do
+            local t = tick()
+            for i = 1, #windParts do
+                local w = windParts[i]
+                if w.p and w.p.Parent then
+                    local sway = math.sin(t*w.speed + w.phase) * w.amp
+                    local side = math.cos(t*w.speed*0.65 + w.phase*1.4) * w.amp * w.axis
+                    w.p.CFrame = w.base * CFrame.Angles(sway, 0, side)
+                end
+            end
+            task.wait(0.05)
+        end
+    end)
 end
 
 -- ═══════════════════════════════════════════════════════════════
@@ -283,13 +316,16 @@ local function buildGrass(GF)
                 bCol = lc(W.C.G_BASE, W.C.G_BRIGHT, math.random())
                 bMat = Enum.Material.LeafyGrass
             end
-            mp({
+            local blade = mp({
                 n   = "Bl",
                 sz  = Vector3.new(rng(0.16,0.32), bH, rng(0.04,0.10)),
                 cf  = CFrame.new(bx, by0+bH*0.5, bz)
                    * CFrame.Angles(math.rad(rng(-18,18)), math.rad(rng(0,360)), math.rad(rng(-18,18))),
                 col = bCol, mat = bMat, cc = false, cs = false, par = GF,
             })
+            if math.random() < 0.16 then
+                registerWind(blade, rng(5, 12), rng(0.8, 1.7), rng(0, math.pi*2), 0.35)
+            end
             blades = blades + 1
         end
 
@@ -318,17 +354,20 @@ local function oneFlower(x, z, FF)
     local gy   = groundH(x, z)
     local ft   = FTYPES[rngi(1, #FTYPES)]
     local pCol, cCol, nPet, round = ft[1], ft[2], ft[3], ft[4]
-    local sH   = rng(0.6, 1.4)
-    local sW   = rng(0.08, 0.13)
+    local sH   = rng(0.9, 1.8)
+    local sW   = rng(0.11, 0.16)
     local tX   = rng(-12, 12)
     local tZ   = rng(-12, 12)
 
     -- Tallo
-    mp({ n="FSt", sz=Vector3.new(sW,sH,sW),
+    local stem = mp({ n="FSt", sz=Vector3.new(sW,sH,sW),
          cf=CFrame.new(x, gy+sH*0.5, z)
            * CFrame.Angles(math.rad(tX), rng(0,math.pi*2), math.rad(tZ)),
          col=W.C.F_STEM, mat=Enum.Material.SmoothPlastic,
          cc=false, cs=false, par=FF })
+    if math.random() < 0.75 then
+        registerWind(stem, rng(4, 8), rng(0.9, 1.4), rng(0, math.pi*2), 0.55)
+    end
 
     -- Hojitas
     if math.random() < 0.6 then
@@ -342,12 +381,12 @@ local function oneFlower(x, z, FF)
     end
 
     local topY  = gy + sH + 0.05
-    local pSize = rng(0.22, 0.42)
+    local pSize = rng(0.34, 0.62)
 
     -- Pétalos
     for p = 1, nPet do
         local ang  = (p/nPet) * math.pi * 2
-        local pDist = pSize * 0.62
+        local pDist = pSize * 0.72
         local pW   = pSize * (round and 1.1 or 0.75)
         local pH   = pSize * (round and 0.55 or 0.85)
         mp({ n="FP", sz=Vector3.new(pW, pH, pSize*0.25),
@@ -591,7 +630,7 @@ local function buildOnePeak(cx, cz, peakH, baseR, seed, MF)
 
             mp({ n="MS", sz=Vector3.new(arcW, segH, segD),
                  cf=CFrame.new(segX, layerY+segH*0.5, segZ)
-                   * CFrame.Angles(math.rad(rng(-5,5)*(1-lt)), ang, math.rad(rng(-4,4)*(1-lt))),
+                   * CFrame.Angles(math.rad(rng(-2,2)*(1-lt)), ang, math.rad(rng(-2,2)*(1-lt))),
                  col=lc(layerCol, W.C.M_BASE, rng(0,0.2)), mat=layerMat, par=MF })
 
             -- Salientes de roca (cada 3 segmentos)
@@ -740,6 +779,21 @@ local function buildMountains(MF)
             end
         end
 
+
+        -- Faldón de soporte para evitar montañas "viradas"
+        for b = 1, 10 do
+            local ba = (b/10) * math.pi * 2
+            local br = g.b * rng(1.2, 1.65)
+            local bx = g.x + math.cos(ba) * br
+            local bz = g.z + math.sin(ba) * br
+            local by = groundH(bx, bz)
+            local bh = rng(7, 14)
+            mp({ n="MSk", sz=Vector3.new(rng(16,26), bh, rng(10,18)),
+                 cf=CFrame.new(bx, by+bh*0.45, bz) * CFrame.Angles(0, ba, 0),
+                 col=lc(W.C.M_BASE, W.C.M_ROCK, rng(0.25,0.6)),
+                 mat=Enum.Material.Rock, par=MF })
+        end
+
         task.wait(0.1)
     end
     print("✅ Montañas listas ("..total.." grupos)")
@@ -764,8 +818,11 @@ local function buildTrees(TrF)
 
             if tt == 1 then
                 local trH = rng(4.5, 9); local trW = rng(0.8, 1.4); local cpR = rng(4, 7)
+                mp({ n="TrRt", sz=Vector3.new(trW*1.7, rng(0.35,0.7), trW*1.7),
+                     pos=Vector3.new(tx, gy+0.15, tz), col=W.C.DIRT_D,
+                     mat=Enum.Material.Ground, par=TrF })
                 mp({ n="Trk", sz=Vector3.new(trW,trH,trW),
-                     cf=CFrame.new(tx,gy+trH*0.5,tz)*CFrame.Angles(0,rng(0,math.pi*2),0),
+                     cf=CFrame.new(tx,gy+trH*0.5+0.15,tz)*CFrame.Angles(0,rng(0,math.pi*2),0),
                      col=lc(W.C.T_TRUNK,W.C.T_BARK,rng(0,0.6)), mat=Enum.Material.Wood, par=TrF })
                 mp({ n="Can", sz=Vector3.new(cpR*2,cpR*1.55,cpR*2),
                      pos=Vector3.new(tx,gy+trH+cpR*0.65,tz),
@@ -780,8 +837,11 @@ local function buildTrees(TrF)
 
             elseif tt == 2 then
                 local trH = rng(7,14); local cpR = rng(3.5,5.5); local cones = rngi(3,5)
+                mp({ n="PRt", sz=Vector3.new(1.45, rng(0.35,0.65), 1.45),
+                     pos=Vector3.new(tx, gy+0.15, tz),
+                     col=W.C.DIRT_D, mat=Enum.Material.Ground, par=TrF })
                 mp({ n="PTrk", sz=Vector3.new(0.75,trH,0.75),
-                     pos=Vector3.new(tx,gy+trH*0.5,tz),
+                     pos=Vector3.new(tx,gy+trH*0.5+0.15,tz),
                      col=W.C.T_TRUNK, mat=Enum.Material.Wood, par=TrF })
                 for c = 1, cones do
                     local ct = (c-1)/(cones-1); local cR = cpR*(1-ct*0.65)
@@ -793,8 +853,11 @@ local function buildTrees(TrF)
 
             else
                 local trH = rng(3.5, 7)
+                mp({ n="FRt", sz=Vector3.new(1.7, rng(0.35,0.75), 1.7),
+                     pos=Vector3.new(tx, gy+0.15, tz),
+                     col=W.C.DIRT_D, mat=Enum.Material.Ground, par=TrF })
                 mp({ n="FTrk", sz=Vector3.new(1.0,trH,1.0),
-                     pos=Vector3.new(tx,gy+trH*0.5,tz),
+                     pos=Vector3.new(tx,gy+trH*0.5+0.15,tz),
                      col=W.C.T_BARK, mat=Enum.Material.Wood, par=TrF })
                 for hl = 1, 3 do
                     local lR = rng(3,5.5)*(1-hl*0.18)
@@ -871,19 +934,25 @@ end
 -- 9. CAMINO
 -- ═══════════════════════════════════════════════════════════════
 local function buildPath(PF)
-    local segs = 28; local hZ2 = W.SIZE_Z*0.5
+    local segs = 36; local hZ2 = W.SIZE_Z*0.5
     for s = 1, segs do
         local t  = (s-1)/(segs-1)
+        local t2 = math.min(1, s/(segs-1))
         local pz = -hZ2 + t*W.SIZE_Z
         local px = math.sin(t*math.pi*2.2)*18
+        local nz = -hZ2 + t2*W.SIZE_Z
+        local nx = math.sin(t2*math.pi*2.2)*18
+        local dir = Vector3.new(nx-px, 0, nz-pz)
+        local segLen = math.max(9.5, dir.Magnitude + 2.6)
         local py = groundH(px, pz) + 0.15
-        mp({ n="Pt", sz=Vector3.new(6, 0.55, W.SIZE_Z/segs+0.8),
-             pos=Vector3.new(px, py, pz),
+        local pcf = CFrame.lookAt(Vector3.new(px, py, pz), Vector3.new(px, py, pz)+dir)
+        mp({ n="Pt", sz=Vector3.new(7.5, 0.55, segLen),
+             cf=pcf,
              col=lc(W.C.DIRT, W.C.DIRT_L, math.noise(t*5)*0.5+0.5),
              mat=Enum.Material.Ground, par=PF })
         for side = -1, 1, 2 do
-            mp({ n="PE", sz=Vector3.new(0.55, 0.7, W.SIZE_Z/segs+0.8),
-                 pos=Vector3.new(px+side*3.28, py+0.35, pz),
+            mp({ n="PE", sz=Vector3.new(0.6, 0.65, segLen),
+                 cf=pcf * CFrame.new(side*3.95, 0.3, 0),
                  col=W.C.G_BASE, mat=Enum.Material.Grass, par=PF })
         end
     end
@@ -932,6 +1001,7 @@ local function buildWorld()
     print("🌱 [2/9] Terreno…")    ; buildTerrain(TF)
     print("🌿 [3/9] Hierba…")     ; buildGrass(GF)
     print("🌸 [4/9] Flores…")     ; buildFlowers(FlF)
+    startWind()
     print("🪨 [5/9] Rocas…")      ; buildRocks(RF)
     print("⛰️  [6/9] Montañas…")   ; buildMountains(MF)
     print("🌳 [7/9] Árboles…")    ; buildTrees(TrF)
